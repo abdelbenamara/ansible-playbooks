@@ -1,0 +1,181 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: Access Management for Debian
+  hosts: localhost
+  vars:
+    ssh_port: 22
+  connection: local
+  gather_facts: false
+  become: true
+  tasks:
+
+    - name: Gather only facts returned by os_family
+      ansible.builtin.setup:
+        gather_subset:
+          - '!all'
+          - '!min'
+          - os_family
+    
+    - name: Ensure that OS family is Debian
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.os_family == "Debian"
+        quiet: true
+
+    - name: Gather facts on listening ports
+      community.general.listen_ports_facts:
+
+    - name: Check if a process listen on port {{ ssh_port }}/tcp
+      ansible.builtin.set_fact:
+        ssh_port_conflict: "{{ item }}"
+      loop: "{{ ansible_facts.tcp_listen }}"
+      when:
+        - item.name != "sshd"
+        - item.port == ssh_port
+
+    - name: Ensure that ssh port is available
+      ansible.builtin.assert:
+        that: ssh_port_conflict is undefined
+        quiet: true
+
+    - name: Update installed packages
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+        update_cache: true
+        clean: true
+
+    - name: Install unattended-upgrades, sudo, libpam-pwquality, and openssh-server packages
+      ansible.builtin.apt:
+        name:
+          - unattended-upgrades
+          - sudo
+          - libpam-pwquality
+          - openssh-server
+        state: latest
+
+    - name: Edit /etc/apt/apt.conf.d/02periodic
+      ansible.builtin.lineinfile:
+        path: /etc/apt/apt.conf.d/02periodic
+        line: "{{ item }}"
+        create: true
+      loop:
+        - 'APT::Periodic::Enable "1";'
+        - 'APT::Periodic::Update-Package-Lists "1";'
+        - 'APT::Periodic::Download-Upgradeable-Packages "1";'
+        - 'APT::Periodic::Unattended-Upgrade "1";'
+        - 'APT::Periodic::AutocleanInterval "1";'
+        - 'APT::Periodic::Verbose "1";'
+
+    - name: Edit /etc/sudoers
+      ansible.builtin.lineinfile:
+        path: /etc/sudoers
+        regexp: "^Defaults\t{{ item.key }}"
+        insertafter: '^Defaults'
+        line: "Defaults\t{{ item.value }}"
+      loop:
+        - { key: 'passwd_tries', value: 'passwd_tries=3' }
+        - { key: 'log_input', value: 'log_input' }
+        - { key: 'log_output', value: 'log_output' }
+        - { key: 'iolog_dir', value: 'iolog_dir="/var/log/sudo"' }
+        - { key: 'requiretty', value: 'requiretty' }
+
+    - name: Edit /etc/login.defs
+      ansible.builtin.lineinfile:
+        path: /etc/login.defs
+        regexp: "^{{ item.key }}"
+        line: "{{ item.key }}\t{{ item.value }}"
+      loop:
+        - { key: 'PASS_MAX_DAYS', value: '30' }
+        - { key: 'PASS_MIN_DAYS', value: '2' }
+        - { key: 'PASS_WARN_AGE', value: '7' }
+
+    - name: Edit /etc/pam.d/common-password
+      ansible.builtin.lineinfile:
+        path: /etc/pam.d/common-password
+        regexp: "^password\trequired\t\t\tpam_pwquality.so"
+        insertbefore: '^# and here are more per-package modules'
+        line: "password\trequired\t\t\tpam_pwquality.so {{ item }}"
+      loop:
+        - 'minlen=10 ucredit=-1 lcredit=-1 dcredit=-1 maxrepeat=3 reject_username difok=7 enforce_for_root'
+
+    - name: Edit /etc/ssh/sshd_config
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "^#?\\+{{ item.key }}"
+        line: "{{ item.key }} {{ item.value }}"
+      loop:
+        - { key: 'Port', value: "{{ ssh_port }}" }
+        - { key: 'PermitRootLogin', value: 'no' }
+        - { key: 'PubkeyAuthentication', value: 'yes' }
+        - { key: 'PasswordAuthentication', value: 'no' }
+        - { key: 'ChallengeResponseAuthentication', value: 'no' }
+
+    - name: Restart ssh service
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+        enabled: true
+
+    - name: Install make, git, vim, ufw and fail2ban packages
+      ansible.builtin.apt:
+        name:
+          - make
+          - git
+          - vim
+          - ufw
+          - fail2ban
+        state: latest
+
+    - name: Set dotfiles git directory
+      ansible.builtin.set_fact:
+        dotfiles_git_directory: "{{ lookup('ansible.builtin.env', 'HOME') }}/.dotfiles"
+
+    - name: Download dotfiles
+      ansible.builtin.git:
+        repo: https://github.com/abdelbenamara/dotfiles.git
+        dest: "{{ dotfiles_git_directory }}"
+        single_branch: true
+        update: false
+
+    - name: Make dotfiles
+      community.general.make:
+        chdir: "{{ dotfiles_git_directory }}"
+
+    - name: Enable ufw and allow ssh port
+      community.general.ufw:
+        rule: allow
+        proto: tcp
+        port: "{{ ssh_port }}"
+        comment: 'allow-ssh'
+        state: enabled
+
+    - name: Edit /etc/fail2ban/jail.d/custom.conf
+      ansible.builtin.lineinfile:
+        path: /etc/fail2ban/jail.d/custom.conf
+        line: "{{ item }}"
+        create: true
+      loop:
+        - '[DEFAULT]'
+        - 'bantime = 72h'
+        - 'findtime = 15m'
+        - 'maxretry = 3'
+        - ''
+        - '[sshd]'
+        - 'enabled = true'
+        - "port = {{ ssh_port }}"
+        - 'maxretry = 5'
+
+    - name: Restart fail2ban service
+      ansible.builtin.service:
+        name: fail2ban
+        state: restarted
+        enabled: true
+
+    - name: Remove dependencies that are no longer required
+      ansible.builtin.apt:
+        autoremove: true
+
+    - name: Remove useless packages from the cache
+      ansible.builtin.apt:
+        autoclean: true
