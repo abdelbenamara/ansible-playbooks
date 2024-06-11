@@ -1,0 +1,89 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: PiVPN Wireguard for Debian
+  hosts: localhost
+  vars:
+    vpn_user: pivpn
+    vpn_port: 51820
+  connection: local
+  gather_facts: false
+  become: true
+  tasks:
+
+    - name: Gather only facts returned by os_family
+      ansible.builtin.setup:
+        gather_subset:
+          - '!all'
+          - '!min'
+          - os_family
+    
+    - name: Ensure that OS family is Debian
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.os_family == "Debian"
+        quiet: true
+
+    - name: Gather facts on listening ports
+      community.general.listen_ports_facts:
+
+    - name: Check if a process listen on port {{ vpn_port }}/udp
+      ansible.builtin.set_fact:
+        vpn_port_conflict: "{{ item }}"
+      loop: "{{ ansible_facts.udp_listen }}"
+      when: item.port == vpn_port
+
+    - name: Ensure that vpn port is available
+      ansible.builtin.assert:
+        that: vpn_port_conflict is undefined
+        quiet: true
+
+    - name: Update installed packages
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+        update_cache: true
+        clean: true
+
+    - name: Create /tmp/ansible/PiVPN
+      ansible.builtin.file:
+        path: /tmp/ansible/PiVPN
+        state: directory
+
+    - name: Download PiVPN installation script
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/pivpn/pivpn/master/auto_install/install.sh
+        dest: /tmp/ansible/PiVPN/install.sh
+        mode: '0500'
+
+    - name: Edit /tmp/ansible/PiVPN/wireguard_options.conf
+      ansible.builtin.lineinfile:
+        path: /tmp/ansible/PiVPN/wireguard_options.conf
+        line: "{{ item }}"
+        create: true
+      loop:
+        - "install_user={{ vpn_user }}"
+        - 'VPN=wireguard'
+        - "pivpnPORT={{ vpn_port }}"
+        - 'UNATTUPG=1'
+
+    - name: Pause to configure the PiVPN Wireguard options
+      ansible.builtin.pause:
+        prompt: "The available options are shown in the following example: https://github.com/pivpn/pivpn/blob/master/examples/unattended_wireguard_example.conf"
+
+    - name: Execute the PiVPN installation script
+      ansible.builtin.shell:
+        cmd: /tmp/ansible/PiVPN/install.sh --unattended /tmp/ansible/PiVPN/wireguard_options.conf
+        executable: /bin/bash
+      register: vpn_install
+
+    - name: Print return information from the PiVPN installation script
+      ansible.builtin.debug:
+        var: vpn_install.stdout_lines
+
+    - name: Remove dependencies that are no longer required
+      ansible.builtin.apt:
+        autoremove: true
+
+    - name: Remove useless packages from the cache
+      ansible.builtin.apt:
+        autoclean: true
