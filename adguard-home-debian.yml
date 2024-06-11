@@ -1,0 +1,189 @@
+#!/usr/bin/env ansible-playbook
+---
+- name: AdGuard Home for Debian
+  hosts: localhost
+  vars:
+    home_port: 80
+    dns_port: 53
+  connection: local
+  gather_facts: false
+  become: true
+  tasks:
+
+    - name: Gather only facts returned by os_family and distribution
+      ansible.builtin.setup:
+        gather_subset:
+          - '!all'
+          - '!min'
+          - os_family
+          - distribution
+    
+    - name: Ensure that OS family is Debian
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.os_family == "Debian"
+        quiet: true
+
+    - name: Gather facts on listening ports
+      community.general.listen_ports_facts:
+
+    - name: Check if a process listen on port 3000/tcp
+      ansible.builtin.set_fact:
+        adguardconfiguration_port_conflict: "{{ item }}"
+      loop: "{{ ansible_facts.tcp_listen }}"
+      when: item.port == 3000
+
+    - name: Check if a process listen on port {{ home_port }}/tcp
+      ansible.builtin.set_fact:
+        home_port_conflict: "{{ item }}"
+      loop: "{{ ansible_facts.tcp_listen }}"
+      when: item.port == home_port
+
+    - name: Ensure that configuration and home ports are available
+      ansible.builtin.assert:
+        that:
+          - adguardconfiguration_port_conflict is undefined
+          - home_port_conflict is undefined
+        quiet: true
+
+    - name: Check if a process listen on port {{ dns_port }}/udp
+      ansible.builtin.set_fact:
+        dns_port_conflict: "{{ item }}"
+      loop: "{{ ansible_facts.udp_listen }}"
+      when: item.port == dns_port
+
+    - name: Handle Ubuntu systemd-resolved if needed (https://adguard-dns.io/kb/adguard-home/faq/#bindinuse)
+      block:
+
+        - name: Create /etc/systemd/resolved.conf.d
+          ansible.builtin.file:
+            path: /etc/systemd/resolved.conf.d
+            state: directory
+
+        - name: Edit /etc/systemd/resolved.conf.d/adguardhome.conf
+          ansible.builtin.lineinfile:
+            path: /etc/systemd/resolved.conf.d/adguardhome.conf
+            line: "{{ item }}"
+            create: true
+          loop:
+            - '[Resolve]'
+            - 'DNS=127.0.0.1'
+            - 'DNSStubListener=no'
+
+        - name: Backup /etc/resolv.conf
+          ansible.builtin.copy:
+            src: /etc/resolv.conf
+            dest: /etc/resolv.conf.backup
+
+        - name: Create a symbolic link /etc/resolv.conf to /run/systemd/resolve/resolv.conf
+          ansible.builtin.file:
+            src: /run/systemd/resolve/resolv.conf
+            dest: /etc/resolv.conf
+            state: link
+
+        - name: Restart systemd-resolved service
+          ansible.builtin.service:
+            name: systemd-resolved
+            state: restarted
+            enabled: true
+        
+        - name: Gather facts on listening ports
+          community.general.listen_ports_facts:
+
+        - name: Check if a process listen on port 53/udp
+          ansible.builtin.set_fact:
+            dns_port_issue: "{{ item }}"
+          loop: "{{ ansible_facts.udp_listen }}"
+          when: item.port == 53
+
+        - name: Check if a process listen on port 53/udp
+          ansible.builtin.set_fact:
+            dns_port_conflict: null
+          when: dns_port_issue is undefined
+
+      when:
+        - ansible_facts.distribution == "Ubuntu"
+        - dns_port == 53
+        - dns_port_conflict is defined
+        - dns_port_conflict.user == "systemd-resolve"
+
+    - name: Ensure that dns port is available
+      ansible.builtin.assert:
+        that:
+          - dns_port_conflict is undefined or not dns_port_conflict
+        quiet: true
+
+    - name: Update installed packages
+      ansible.builtin.apt:
+        name: "*"
+        state: latest
+        update_cache: true
+        clean: true
+
+    - name: Install ufw package
+      ansible.builtin.apt:
+        name: ufw
+        state: latest
+
+    - name: Create /tmp/ansible/AdGuardHome
+      ansible.builtin.file:
+        path: /tmp/ansible/AdGuardHome
+        state: directory
+
+    - name: Download AdGuardHome installation script
+      ansible.builtin.get_url:
+        url: https://raw.githubusercontent.com/AdguardTeam/AdGuardHome/master/scripts/install.sh
+        dest: /tmp/ansible/AdGuardHome/install.sh
+        mode: '0500'
+
+    - name: Execute /tmp/ansible/AdGuardHome/install.sh
+      ansible.builtin.shell:
+        cmd: /tmp/ansible/AdGuardHome/install.sh
+
+    - name: Reload ufw and allow adguard-install port
+      community.general.ufw:
+        rule: allow
+        proto: tcp
+        port: 3000
+        comment: 'allow-adguard-install'
+        state: reloaded
+
+    - name: Wait to configure AdGuard Home through the web interface listening on 0.0.0.0:3000
+      ansible.builtin.wait_for:
+        host: 0.0.0.0
+        port: 3000
+        delay: 10
+        state: stopped
+
+    - name: Reload ufw and delete adguard-install port
+      community.general.ufw:
+        delete: true
+        rule: allow
+        proto: tcp
+        port: 3000
+        comment: 'allow-adguard-install'
+        state: reloaded
+
+    - name: Enable ufw and allow adguard-home port
+      community.general.ufw:
+        rule: allow
+        proto: tcp
+        port: "{{ home_port }}"
+        comment: 'allow-adguard-home'
+        state: enabled
+
+    - name: Enable ufw and allow adguard-dns port
+      community.general.ufw:
+        rule: allow
+        proto: udp
+        port: "{{ dns_port }}"
+        comment: 'allow-adguard-dns'
+        state: enabled
+
+    - name: Remove dependencies that are no longer required
+      ansible.builtin.apt:
+        autoremove: true
+
+    - name: Remove useless packages from the cache
+      ansible.builtin.apt:
+        autoclean: true
