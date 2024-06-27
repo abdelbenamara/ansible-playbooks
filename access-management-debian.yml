@@ -45,7 +45,7 @@
         update_cache: true
         clean: true
 
-    - name: Install unattended-upgrades, sudo, libpam-pwquality, and openssh-server packages
+    - name: Install unattended-upgrades, sudo, libpam-pwquality and openssh-server packages
       ansible.builtin.apt:
         name:
           - unattended-upgrades
