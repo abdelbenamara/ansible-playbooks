@@ -20,7 +20,7 @@
     - name: Ensure that OS family is Debian
       ansible.builtin.assert:
         that:
-          - ansible_facts.os_family == "Debian"
+          - ansible_os_family == "Debian"
         quiet: true
 
     - name: Gather facts on listening ports
@@ -29,7 +29,7 @@
     - name: Check if a process listen on port {{ vpn_port }}/udp
       ansible.builtin.set_fact:
         vpn_port_conflict: "{{ item }}"
-      loop: "{{ ansible_facts.udp_listen }}"
+      loop: "{{ udp_listen }}"
       when: item.port == vpn_port
 
     - name: Ensure that vpn port is available
@@ -51,7 +51,8 @@
 
     - name: Download PiVPN installation script
       ansible.builtin.get_url:
-        url: https://raw.githubusercontent.com/pivpn/pivpn/master/auto_install/install.sh
+        url: "https://raw.githubusercontent.com/pivpn/\
+          pivpn/master/auto_install/install.sh"
         dest: /tmp/ansible/PiVPN/install.sh
         mode: '0500'
 
@@ -68,11 +69,14 @@
 
     - name: Pause to configure the PiVPN Wireguard options
       ansible.builtin.pause:
-        prompt: "The available options are shown in the following example: https://github.com/pivpn/pivpn/blob/master/examples/unattended_wireguard_example.conf"
+        prompt: "The available options are shown \
+        in the following example: https://github.com/pivpn/\
+        pivpn/blob/master/examples/unattended_wireguard_example.conf"
 
     - name: Execute the PiVPN installation script
       ansible.builtin.shell:
-        cmd: /tmp/ansible/PiVPN/install.sh --unattended /tmp/ansible/PiVPN/wireguard_options.conf
+        cmd: "/tmp/ansible/PiVPN/install.sh --unattended \
+          /tmp/ansible/PiVPN/wireguard_options.conf"
         executable: /bin/bash
       register: vpn_install
 
