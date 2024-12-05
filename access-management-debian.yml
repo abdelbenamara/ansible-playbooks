@@ -9,17 +9,19 @@
   become: true
   tasks:
 
-    - name: Gather only facts returned by os_family
+    - name: Gather only facts returned by os_family, user_dir
       ansible.builtin.setup:
         gather_subset:
           - '!all'
           - '!min'
           - os_family
+          - user_dir
+      become: false
     
     - name: Ensure that OS family is Debian
       ansible.builtin.assert:
         that:
-          - ansible_facts.os_family == "Debian"
+          - ansible_os_family == "Debian"
         quiet: true
 
     - name: Gather facts on listening ports
@@ -28,7 +30,7 @@
     - name: Check if a process listen on port {{ ssh_port }}/tcp
       ansible.builtin.set_fact:
         ssh_port_conflict: "{{ item }}"
-      loop: "{{ ansible_facts.tcp_listen }}"
+      loop: "{{ tcp_listen }}"
       when:
         - item.name != "sshd"
         - item.port == ssh_port
@@ -45,7 +47,8 @@
         update_cache: true
         clean: true
 
-    - name: Install unattended-upgrades, sudo, libpam-pwquality and openssh-server packages
+    - name: "Install unattended-upgrades, sudo, \
+        libpam-pwquality and openssh-server packages"
       ansible.builtin.apt:
         name:
           - unattended-upgrades
@@ -80,24 +83,47 @@
         - { key: 'iolog_dir', value: 'iolog_dir="/var/log/sudo"' }
         - { key: 'requiretty', value: 'requiretty' }
 
+    - name: Edit /etc/pam.d/common-password
+      ansible.builtin.lineinfile:
+        path: /etc/pam.d/common-password
+        regexp: "^password\trequired\t\t\tpam_pwquality.so"
+        insertbefore: '^# and here are more per-package modules'
+        line: "password\trequired\t\t\tpam_pwquality.so \
+          minlen=10 ucredit=-1 lcredit=-1 dcredit=-1 \
+          maxrepeat=3 reject_username difok=7 enforce_for_root"
+
+    - name: Set password policy facts
+      ansible.builtin.set_fact:
+        pass_max_days: 30   # 99999 (never)
+        pass_min_days: 2
+        pass_warn_days: 7
+
     - name: Edit /etc/login.defs
       ansible.builtin.lineinfile:
         path: /etc/login.defs
         regexp: "^{{ item.key }}"
         line: "{{ item.key }}\t{{ item.value }}"
       loop:
-        - { key: 'PASS_MAX_DAYS', value: '30' }
-        - { key: 'PASS_MIN_DAYS', value: '2' }
-        - { key: 'PASS_WARN_AGE', value: '7' }
+        - { key: 'PASS_MAX_DAYS', value: "{{ pass_max_days }}" }
+        - { key: 'PASS_MIN_DAYS', value: "{{ pass_min_days }}" }
+        - { key: 'PASS_WARN_AGE', value: "{{ pass_warn_days }}" }
 
-    - name: Edit /etc/pam.d/common-password
-      ansible.builtin.lineinfile:
-        path: /etc/pam.d/common-password
-        regexp: "^password\trequired\t\t\tpam_pwquality.so"
-        insertbefore: '^# and here are more per-package modules'
-        line: "password\trequired\t\t\tpam_pwquality.so {{ item }}"
-      loop:
-        - 'minlen=10 ucredit=-1 lcredit=-1 dcredit=-1 maxrepeat=3 reject_username difok=7 enforce_for_root'
+    - name: Add user to sudoers and udpate its password policy
+      ansible.builtin.user:
+        append: true
+        name: "{{ ansible_user_id }}"
+        groups: sudo
+        password_expire_max: "{{ pass_max_days }}"
+        password_expire_min: "{{ pass_min_days }}"
+        password_expire_warn: "{{ pass_warn_days }}"
+    
+    - name: Udpate root password policy and lock it
+      ansible.builtin.user:
+        name: 'root'
+        password_expire_max: "{{ pass_max_days }}"
+        password_expire_min: "{{ pass_min_days }}"
+        password_expire_warn: "{{ pass_warn_days }}"
+        password_lock: true
 
     - name: Edit /etc/ssh/sshd_config
       ansible.builtin.lineinfile:
@@ -127,9 +153,9 @@
           - fail2ban
         state: latest
 
-    - name: Set dotfiles git directory
+    - name: Set dotfiles git directory fact
       ansible.builtin.set_fact:
-        dotfiles_git_directory: "{{ lookup('ansible.builtin.env', 'HOME') }}/.dotfiles"
+        dotfiles_git_directory: "{{ ansible_user_dir }}/.dotfiles"
 
     - name: Download dotfiles
       ansible.builtin.git:
