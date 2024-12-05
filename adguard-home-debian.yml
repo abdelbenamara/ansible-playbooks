@@ -21,7 +21,7 @@
     - name: Ensure that OS family is Debian
       ansible.builtin.assert:
         that:
-          - ansible_facts.os_family == "Debian"
+          - ansible_os_family == "Debian"
         quiet: true
 
     - name: Gather facts on listening ports
@@ -30,13 +30,13 @@
     - name: Check if a process listen on port 3000/tcp
       ansible.builtin.set_fact:
         adguardconfiguration_port_conflict: "{{ item }}"
-      loop: "{{ ansible_facts.tcp_listen }}"
+      loop: "{{ tcp_listen }}"
       when: item.port == 3000
 
     - name: Check if a process listen on port {{ home_port }}/tcp
       ansible.builtin.set_fact:
         home_port_conflict: "{{ item }}"
-      loop: "{{ ansible_facts.tcp_listen }}"
+      loop: "{{ tcp_listen }}"
       when: item.port == home_port
 
     - name: Ensure that configuration and home ports are available
@@ -49,10 +49,11 @@
     - name: Check if a process listen on port {{ dns_port }}/udp
       ansible.builtin.set_fact:
         dns_port_conflict: "{{ item }}"
-      loop: "{{ ansible_facts.udp_listen }}"
+      loop: "{{ udp_listen }}"
       when: item.port == dns_port
 
-    - name: Handle Ubuntu systemd-resolved if needed (https://adguard-dns.io/kb/adguard-home/faq/#bindinuse)
+    - name: "Handle Ubuntu systemd-resolved if needed \
+        (https://adguard-dns.io/kb/adguard-home/faq/#bindinuse)"
       block:
 
         - name: Create /etc/systemd/resolved.conf.d
@@ -75,7 +76,8 @@
             src: /etc/resolv.conf
             dest: /etc/resolv.conf.backup
 
-        - name: Create a symbolic link /etc/resolv.conf to /run/systemd/resolve/resolv.conf
+        - name: "Create a symbolic link /etc/resolv.conf to \
+            /run/systemd/resolve/resolv.conf"
           ansible.builtin.file:
             src: /run/systemd/resolve/resolv.conf
             dest: /etc/resolv.conf
@@ -93,7 +95,7 @@
         - name: Check if a process listen on port 53/udp
           ansible.builtin.set_fact:
             dns_port_issue: "{{ item }}"
-          loop: "{{ ansible_facts.udp_listen }}"
+          loop: "{{ udp_listen }}"
           when: item.port == 53
 
         - name: Check if a process listen on port 53/udp
@@ -102,7 +104,7 @@
           when: dns_port_issue is undefined
 
       when:
-        - ansible_facts.distribution == "Ubuntu"
+        - ansible_distribution == "Ubuntu"
         - dns_port == 53
         - dns_port_conflict is defined
         - dns_port_conflict.user == "systemd-resolve"
@@ -132,7 +134,8 @@
 
     - name: Download AdGuardHome installation script
       ansible.builtin.get_url:
-        url: https://raw.githubusercontent.com/AdguardTeam/AdGuardHome/master/scripts/install.sh
+        url: "https://raw.githubusercontent.com/AdguardTeam/\
+          AdGuardHome/master/scripts/install.sh"
         dest: /tmp/ansible/AdGuardHome/install.sh
         mode: '0500'
 
@@ -148,7 +151,8 @@
         comment: 'allow-adguard-install'
         state: reloaded
 
-    - name: Wait to configure AdGuard Home through the web interface listening on 0.0.0.0:3000
+    - name: "Wait to configure AdGuard Home through the web interface \
+        listening on 0.0.0.0:3000"
       ansible.builtin.wait_for:
         host: 0.0.0.0
         port: 3000
