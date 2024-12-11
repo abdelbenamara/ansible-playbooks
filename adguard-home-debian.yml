@@ -14,8 +14,8 @@
     - name: Gather only facts returned by os_family and distribution
       ansible.builtin.setup:
         gather_subset:
-          - '!all'
-          - '!min'
+          - "!all"
+          - "!min"
           - os_family
           - distribution
     
@@ -68,9 +68,9 @@
             line: "{{ item }}"
             create: true
           loop:
-            - '[Resolve]'
-            - 'DNS=127.0.0.1'
-            - 'DNSStubListener=no'
+            - "[Resolve]"
+            - "DNS=127.0.0.1"
+            - "DNSStubListener=no"
 
         - name: Backup /etc/resolv.conf
           ansible.builtin.copy:
@@ -138,7 +138,7 @@
         url: "https://raw.githubusercontent.com/AdguardTeam/\
           AdGuardHome/master/scripts/install.sh"
         dest: "{{ tmp_dir }}"
-        mode: '0500'
+        mode: "0500"
 
     - name: Execute {{ tmp_dir }}/install.sh
       ansible.builtin.shell:
@@ -149,7 +149,7 @@
         rule: allow
         proto: tcp
         port: 3000
-        comment: 'allow-adguard-install'
+        comment: "allow-adguard-install"
         state: reloaded
 
     - name: "Wait to configure AdGuard Home through the web interface \
@@ -166,7 +166,7 @@
         rule: allow
         proto: tcp
         port: 3000
-        comment: 'allow-adguard-install'
+        comment: "allow-adguard-install"
         state: reloaded
 
     - name: Enable ufw and allow adguard-home port
@@ -174,7 +174,7 @@
         rule: allow
         proto: tcp
         port: "{{ home_port }}"
-        comment: 'allow-adguard-home'
+        comment: "allow-adguard-home"
         state: enabled
 
     - name: Enable ufw and allow adguard-dns port
@@ -182,7 +182,7 @@
         rule: allow
         proto: udp
         port: "{{ dns_port }}"
-        comment: 'allow-adguard-dns'
+        comment: "allow-adguard-dns"
         state: enabled
 
     - name: Remove dependencies that are no longer required
