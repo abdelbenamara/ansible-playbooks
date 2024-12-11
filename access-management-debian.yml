@@ -157,10 +157,12 @@
         dest: "{{ ansible_user_dir }}/.dotfiles"
         single_branch: true
         update: false
+      become: false
 
     - name: Make dotfiles
       community.general.make:
         chdir: "{{ ansible_user_dir }}/.dotfiles"
+      become: false
 
     - name: Enable ufw and allow ssh port
       community.general.ufw:
@@ -191,14 +193,6 @@
         name: fail2ban
         state: restarted
         enabled: true
-    
-    - name: Create {{ ansible_user_dir }}/.hushlogin
-      ansible.builtin.file:
-        path: "{{ ansible_user_dir }}/.hushlogin"
-        state: touch
-        access_time: preserve
-        modification_time: preserve
-      become: false
 
     - name: Remove dependencies that are no longer required
       ansible.builtin.apt:
