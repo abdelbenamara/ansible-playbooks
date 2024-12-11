@@ -110,7 +110,6 @@
 
     - name: Udpate user password policy
       ansible.builtin.user:
-        append: true
         name: "{{ item }}"
         password_expire_max: "{{ pass_max_days }}"
         password_expire_min: "{{ pass_min_days }}"
@@ -119,7 +118,7 @@
         - "{{ ansible_user_id }}"
         - "root"
     
-    - name: Udpate root password policy and lock it
+    - name: Lock root account
       ansible.builtin.user:
         name: "root"
         password_lock: true
@@ -196,7 +195,9 @@
     - name: Create {{ ansible_user_dir }}/.hushlogin
       ansible.builtin.file:
         path: "{{ ansible_user_dir }}/.hushlogin"
-        state: file
+        state: touch
+        access_time: preserve
+        modification_time: preserve
       become: false
 
     - name: Remove dependencies that are no longer required
