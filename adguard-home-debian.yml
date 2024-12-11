@@ -5,6 +5,7 @@
   vars:
     home_port: 80
     dns_port: 53
+    tmp_dir: "/tmp/ansible/AdGuardHome"
   connection: local
   gather_facts: false
   become: true
@@ -29,7 +30,7 @@
 
     - name: Check if a process listen on port 3000/tcp
       ansible.builtin.set_fact:
-        adguardconfiguration_port_conflict: "{{ item }}"
+        conf_port_conflict: "{{ item }}"
       loop: "{{ tcp_listen }}"
       when: item.port == 3000
 
@@ -42,7 +43,7 @@
     - name: Ensure that configuration and home ports are available
       ansible.builtin.assert:
         that:
-          - adguardconfiguration_port_conflict is undefined
+          - conf_port_conflict is undefined
           - home_port_conflict is undefined
         quiet: true
 
@@ -127,21 +128,21 @@
         name: ufw
         state: latest
 
-    - name: Create /tmp/ansible/AdGuardHome
+    - name: Create {{ tmp_dir }}
       ansible.builtin.file:
-        path: /tmp/ansible/AdGuardHome
+        path: "{{ tmp_dir }}"
         state: directory
 
     - name: Download AdGuardHome installation script
       ansible.builtin.get_url:
         url: "https://raw.githubusercontent.com/AdguardTeam/\
           AdGuardHome/master/scripts/install.sh"
-        dest: /tmp/ansible/AdGuardHome/install.sh
+        dest: "{{ tmp_dir }}"
         mode: '0500'
 
-    - name: Execute /tmp/ansible/AdGuardHome/install.sh
+    - name: Execute {{ tmp_dir }}/install.sh
       ansible.builtin.shell:
-        cmd: /tmp/ansible/AdGuardHome/install.sh
+        cmd: "{{ tmp_dir }}/install.sh"
 
     - name: Reload ufw and allow adguard-install port
       community.general.ufw:
