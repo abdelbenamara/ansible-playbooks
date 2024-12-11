@@ -12,8 +12,8 @@
     - name: Gather only facts returned by os_family, user_dir
       ansible.builtin.setup:
         gather_subset:
-          - '!all'
-          - '!min'
+          - "!all"
+          - "!min"
           - os_family
           - user_dir
       become: false
@@ -74,20 +74,20 @@
       ansible.builtin.lineinfile:
         path: /etc/sudoers
         regexp: "^Defaults\t{{ item.key }}"
-        insertafter: '^Defaults'
+        insertafter: "^Defaults"
         line: "Defaults\t{{ item.value }}"
       loop:
-        - { key: 'passwd_tries', value: 'passwd_tries=3' }
-        - { key: 'log_input', value: 'log_input' }
-        - { key: 'log_output', value: 'log_output' }
-        - { key: 'iolog_dir', value: 'iolog_dir="/var/log/sudo"' }
-        - { key: 'requiretty', value: 'requiretty' }
+        - { key: "passwd_tries", value: "passwd_tries=3" }
+        - { key: "log_input", value: "log_input" }
+        - { key: "log_output", value: "log_output" }
+        - { key: "iolog_dir", value: 'iolog_dir="/var/log/sudo"' }
+        - { key: "requiretty", value: "requiretty" }
 
     - name: Edit /etc/pam.d/common-password
       ansible.builtin.lineinfile:
         path: /etc/pam.d/common-password
         regexp: "^password\trequired\t\t\tpam_pwquality.so"
-        insertbefore: '^# and here are more per-package modules'
+        insertbefore: "^# and here are more per-package modules"
         line: "password\trequired\t\t\tpam_pwquality.so \
           minlen=10 ucredit=-1 lcredit=-1 dcredit=-1 \
           maxrepeat=3 reject_username difok=7 enforce_for_root"
@@ -104,25 +104,24 @@
         regexp: "^{{ item.key }}"
         line: "{{ item.key }}\t{{ item.value }}"
       loop:
-        - { key: 'PASS_MAX_DAYS', value: "{{ pass_max_days }}" }
-        - { key: 'PASS_MIN_DAYS', value: "{{ pass_min_days }}" }
-        - { key: 'PASS_WARN_AGE', value: "{{ pass_warn_days }}" }
+        - { key: "PASS_MAX_DAYS", value: "{{ pass_max_days }}" }
+        - { key: "PASS_MIN_DAYS", value: "{{ pass_min_days }}" }
+        - { key: "PASS_WARN_AGE", value: "{{ pass_warn_days }}" }
 
-    - name: Add user to sudoers and udpate its password policy
+    - name: Udpate user password policy
       ansible.builtin.user:
         append: true
-        name: "{{ ansible_user_id }}"
-        groups: sudo
+        name: "{{ item }}"
         password_expire_max: "{{ pass_max_days }}"
         password_expire_min: "{{ pass_min_days }}"
         password_expire_warn: "{{ pass_warn_days }}"
+      loop:
+        - "{{ ansible_user_id }}"
+        - "root"
     
     - name: Udpate root password policy and lock it
       ansible.builtin.user:
-        name: 'root'
-        password_expire_max: "{{ pass_max_days }}"
-        password_expire_min: "{{ pass_min_days }}"
-        password_expire_warn: "{{ pass_warn_days }}"
+        name: "root"
         password_lock: true
 
     - name: Edit /etc/ssh/sshd_config
@@ -131,11 +130,11 @@
         regexp: "^#?\\+{{ item.key }}"
         line: "{{ item.key }} {{ item.value }}"
       loop:
-        - { key: 'Port', value: "{{ ssh_port }}" }
-        - { key: 'PermitRootLogin', value: 'no' }
-        - { key: 'PubkeyAuthentication', value: 'yes' }
-        - { key: 'PasswordAuthentication', value: 'no' }
-        - { key: 'ChallengeResponseAuthentication', value: 'no' }
+        - { key: "Port", value: "{{ ssh_port }}" }
+        - { key: "PermitRootLogin", value: "no" }
+        - { key: "PubkeyAuthentication", value: "yes" }
+        - { key: "PasswordAuthentication", value: "no" }
+        - { key: "ChallengeResponseAuthentication", value: "no" }
 
     - name: Restart ssh service
       ansible.builtin.service:
@@ -169,7 +168,7 @@
         rule: allow
         proto: tcp
         port: "{{ ssh_port }}"
-        comment: 'allow-ssh'
+        comment: "allow-ssh"
         state: enabled
 
     - name: Edit /etc/fail2ban/jail.d/custom.conf
@@ -178,15 +177,15 @@
         line: "{{ item }}"
         create: true
       loop:
-        - '[DEFAULT]'
-        - 'bantime = 72h'
-        - 'findtime = 15m'
-        - 'maxretry = 3'
-        - ''
-        - '[sshd]'
-        - 'enabled = true'
+        - "[DEFAULT]"
+        - "bantime = 72h"
+        - "findtime = 15m"
+        - "maxretry = 3"
+        - ""
+        - "[sshd]"
+        - "enabled = true"
         - "port = {{ ssh_port }}"
-        - 'maxretry = 5'
+        - "maxretry = 5"
 
     - name: Restart fail2ban service
       ansible.builtin.service:
