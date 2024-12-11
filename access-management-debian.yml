@@ -153,20 +153,16 @@
           - fail2ban
         state: latest
 
-    - name: Set dotfiles git directory fact
-      ansible.builtin.set_fact:
-        dotfiles_git_directory: "{{ ansible_user_dir }}/.dotfiles"
-
     - name: Download dotfiles
       ansible.builtin.git:
         repo: https://github.com/abdelbenamara/dotfiles.git
-        dest: "{{ dotfiles_git_directory }}"
+        dest: "{{ ansible_user_dir }}/.dotfiles"
         single_branch: true
         update: false
 
     - name: Make dotfiles
       community.general.make:
-        chdir: "{{ dotfiles_git_directory }}"
+        chdir: "{{ ansible_user_dir }}/.dotfiles"
 
     - name: Enable ufw and allow ssh port
       community.general.ufw:
@@ -197,6 +193,12 @@
         name: fail2ban
         state: restarted
         enabled: true
+    
+    - name: Create {{ ansible_user_dir }}/.hushlogin
+      ansible.builtin.file:
+        path: "{{ ansible_user_dir }}/.hushlogin"
+        state: file
+      become: false
 
     - name: Remove dependencies that are no longer required
       ansible.builtin.apt:
