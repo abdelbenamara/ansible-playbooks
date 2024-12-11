@@ -5,6 +5,7 @@
   vars:
     vpn_user: pivpn
     vpn_port: 51820
+    tmp_dir: "/tmp/ansible/PiVPN"
   connection: local
   gather_facts: false
   become: true
@@ -44,21 +45,21 @@
         update_cache: true
         clean: true
 
-    - name: Create /tmp/ansible/PiVPN
+    - name: Create {{ tmp_dir }}
       ansible.builtin.file:
-        path: /tmp/ansible/PiVPN
+        path: "{{ tmp_dir }}"
         state: directory
 
     - name: Download PiVPN installation script
       ansible.builtin.get_url:
         url: "https://raw.githubusercontent.com/pivpn/\
           pivpn/master/auto_install/install.sh"
-        dest: /tmp/ansible/PiVPN/install.sh
+        dest: "{{ tmp_dir }}"
         mode: '0500'
 
-    - name: Edit /tmp/ansible/PiVPN/wireguard_options.conf
+    - name: Edit {{ tmp_dir }}/wireguard_options.conf
       ansible.builtin.lineinfile:
-        path: /tmp/ansible/PiVPN/wireguard_options.conf
+        path: "{{ tmp_dir }}/wireguard_options.conf"
         line: "{{ item }}"
         create: true
       loop:
@@ -75,8 +76,8 @@
 
     - name: Execute the PiVPN installation script
       ansible.builtin.shell:
-        cmd: "/tmp/ansible/PiVPN/install.sh --unattended \
-          /tmp/ansible/PiVPN/wireguard_options.conf"
+        cmd: "{{ tmp_dir }}/install.sh --unattended \
+          {{ tmp_dir }}/wireguard_options.conf"
         executable: /bin/bash
       register: vpn_install
 
