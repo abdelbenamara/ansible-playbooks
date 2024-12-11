@@ -14,8 +14,8 @@
     - name: Gather only facts returned by os_family
       ansible.builtin.setup:
         gather_subset:
-          - '!all'
-          - '!min'
+          - "!all"
+          - "!min"
           - os_family
     
     - name: Ensure that OS family is Debian
@@ -55,7 +55,7 @@
         url: "https://raw.githubusercontent.com/pivpn/\
           pivpn/master/auto_install/install.sh"
         dest: "{{ tmp_dir }}"
-        mode: '0500'
+        mode: "0500"
 
     - name: Edit {{ tmp_dir }}/wireguard_options.conf
       ansible.builtin.lineinfile:
@@ -64,9 +64,9 @@
         create: true
       loop:
         - "install_user={{ vpn_user }}"
-        - 'VPN=wireguard'
+        - "VPN=wireguard"
         - "pivpnPORT={{ vpn_port }}"
-        - 'UNATTUPG=1'
+        - "UNATTUPG=1"
 
     - name: Pause to configure the PiVPN Wireguard options
       ansible.builtin.pause:
