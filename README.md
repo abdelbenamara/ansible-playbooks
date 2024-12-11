@@ -20,7 +20,7 @@ ansible-galaxy collection install --upgrade community.general
 ansible-playbook access-management-debian.yml [--ask-become-pass] [--extra-vars '{"ssh_port":<number>}']
 ```
 
-- AdGuard Home for Debian
+- AdGuard Home for Debian (and Ubuntu)
 ```
 ansible-playbook adguard-home-debian.yml [--ask-become-pass] [--extra-vars '{"home_port":<number>,"dns_port":<number>,"tmp_dir":"<path>"}']
 ```
