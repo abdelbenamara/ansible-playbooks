@@ -1,6 +1,6 @@
 #!/usr/bin/env ansible-playbook
 ---
-- name: AdGuard Home for Debian
+- name: AdGuard Home for Debian (and Ubuntu)
   hosts: localhost
   vars:
     home_port: 80
